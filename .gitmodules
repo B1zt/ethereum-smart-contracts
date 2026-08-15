@@ -1,0 +1,12 @@
+[submodule "02-nft-marketplace/contracts/lib/openzeppelin-contracts"]
+	path = 02-nft-marketplace/contracts/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "02-nft-marketplace/contracts/lib/openzeppelin-contracts-upgradeable"]
+	path = 02-nft-marketplace/contracts/lib/openzeppelin-contracts-upgradeable
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "02-nft-marketplace/contracts/lib/ERC721A"]
+	path = 02-nft-marketplace/contracts/lib/ERC721A
+	url = https://github.com/chiru-labs/ERC721A
+[submodule "02-nft-marketplace/contracts/lib/forge-std"]
+	path = 02-nft-marketplace/contracts/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
