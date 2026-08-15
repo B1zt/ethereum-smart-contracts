@@ -10,3 +10,12 @@
 [submodule "02-nft-marketplace/contracts/lib/forge-std"]
 	path = 02-nft-marketplace/contracts/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "01-token-launch-suite/contracts/lib/forge-std"]
+	path = 01-token-launch-suite/contracts/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "01-token-launch-suite/contracts/lib/openzeppelin-contracts-upgradeable"]
+	path = 01-token-launch-suite/contracts/lib/openzeppelin-contracts-upgradeable
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "01-token-launch-suite/contracts/lib/openzeppelin-contracts"]
+	path = 01-token-launch-suite/contracts/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
