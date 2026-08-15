@@ -1,0 +1,212 @@
+// Indexed state for the token launch suite.
+//
+// Everything here except `AirdropEntry` is derivable from chain logs and can be dropped and
+// replayed. The airdrop allocation list is the exception: it is the input the Merkle root was
+// built from, so it is the one table that genuinely lives here and nowhere else.
+//
+// uint256 values are stored as decimal strings. They do not fit in a JS number, and Prisma's
+// Decimal type is awkward to compare against on-chain values exactly.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProposalState {
+  PENDING
+  ACTIVE
+  CANCELED
+  DEFEATED
+  SUCCEEDED
+  QUEUED
+  EXPIRED
+  EXECUTED
+}
+
+enum VoteSupport {
+  AGAINST
+  FOR
+  ABSTAIN
+}
+
+/// One row per airdrop allocation. The source of truth the Merkle tree is built from.
+///
+/// `index` is what makes the on-chain claim bitmap work: the contract packs 256 claims into a
+/// single storage word keyed by this index, so it must be dense, stable, and unique.
+model AirdropEntry {
+  id         String   @id @default(cuid())
+  /// Position in the tree. Dense from zero, never reused.
+  index      Int      @unique
+  address    String   @unique
+  amount     String
+  /// Set once the on-chain Claimed event is indexed.
+  claimedAt  DateTime?
+  claimTx    String?
+  createdAt  DateTime @default(now())
+
+  @@index([address])
+  @@index([claimedAt])
+}
+
+/// The published root, kept so a mismatch between the deployed contract and this database is
+/// detectable rather than silently serving proofs that will never verify.
+model AirdropRoot {
+  id           String   @id @default(cuid())
+  root         String   @unique
+  entryCount   Int
+  totalAmount  String
+  deadline     DateTime
+  /// True once the contract holding this root has been deployed and verified.
+  isPublished  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+/// Mirror of an on-chain vesting schedule.
+model VestingSchedule {
+  /// On-chain schedule id.
+  id           String   @id
+  beneficiary  String
+  total        String
+  released     String   @default("0")
+  startTime    DateTime
+  /// Seconds after `startTime` before anything is claimable.
+  cliffSeconds Int
+  /// Total schedule length in seconds, including the cliff.
+  durationSeconds Int
+  revocable    Boolean
+  revoked      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  releases     VestingRelease[]
+
+  @@index([beneficiary])
+  @@index([revoked])
+}
+
+model VestingRelease {
+  id          String          @id @default(cuid())
+  scheduleId  String
+  schedule    VestingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  beneficiary String
+  amount      String
+  txHash      String
+  logIndex    Int
+  blockNumber BigInt
+  blockTime   DateTime
+
+  // Uniqueness on the log position is what makes reindexing idempotent.
+  @@unique([txHash, logIndex])
+  @@index([beneficiary, blockTime])
+}
+
+/// A wallet's position in the staking vault.
+///
+/// Share balance is authoritative; the asset value is a snapshot that goes stale as rewards stream,
+/// which is why the API recomputes it from the vault rather than trusting this column.
+model StakePosition {
+  address       String   @id
+  shares        String   @default("0")
+  /// Assets deposited less assets withdrawn. Used to compute realised profit.
+  netDeposited  String   @default("0")
+  updatedAt     DateTime @updatedAt
+
+  @@index([shares])
+}
+
+model StakeEvent {
+  id          String   @id @default(cuid())
+  address     String
+  /// "DEPOSIT" or "WITHDRAW".
+  kind        String
+  assets      String
+  shares      String
+  txHash      String
+  logIndex    Int
+  blockNumber BigInt
+  blockTime   DateTime
+
+  @@unique([txHash, logIndex])
+  @@index([address, blockTime])
+}
+
+/// Time series of the vault's share price, so the frontend can chart yield without replaying logs.
+model VaultSnapshot {
+  id             String   @id @default(cuid())
+  blockNumber    BigInt   @unique
+  totalAssets    String
+  totalShares    String
+  pricePerShare  String
+  lockedRewards  String
+  aprBps         Int
+  capturedAt     DateTime
+
+  @@index([capturedAt])
+}
+
+model Proposal {
+  /// On-chain proposal id, a uint256.
+  id            String        @id
+  proposer      String
+  description   String
+  /// ABI-encoded targets, values and calldatas, kept so the UI can render what a proposal does.
+  targets       String[]
+  values        String[]
+  calldatas     String[]
+  voteStart     DateTime
+  voteEnd       DateTime
+  state         ProposalState @default(PENDING)
+  forVotes      String        @default("0")
+  againstVotes  String        @default("0")
+  abstainVotes  String        @default("0")
+  /// Set when the proposal is queued in the timelock.
+  etaAt         DateTime?
+  executedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  votes         Vote[]
+
+  @@index([state, voteEnd])
+  @@index([proposer])
+}
+
+model Vote {
+  id          String      @id @default(cuid())
+  proposalId  String
+  proposal    Proposal    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  voter       String
+  support     VoteSupport
+  weight      String
+  reason      String?
+  txHash      String
+  logIndex    Int
+  blockNumber BigInt
+  blockTime   DateTime
+
+  @@unique([txHash, logIndex])
+  @@index([proposalId, blockTime])
+  @@index([voter])
+}
+
+/// Current voting power per address, maintained from DelegateVotesChanged.
+model VotingPower {
+  address     String   @id
+  votes       String   @default("0")
+  delegatedTo String?
+  updatedAt   DateTime @updatedAt
+
+  @@index([votes])
+}
+
+/// Per-contract indexing cursor, holding the highest block considered final.
+model IndexerCursor {
+  id            String   @id
+  contract      String   @unique
+  lastSafeBlock BigInt
+  updatedAt     DateTime @updatedAt
+}
