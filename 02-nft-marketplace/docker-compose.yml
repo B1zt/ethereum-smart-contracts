@@ -1,3 +1,8 @@
+# Explicit project name. Compose otherwise derives it from the directory, and two projects in
+# this portfolio share the directory name 02-nft-marketplace, so without this they would share
+# one namespace and tear each other down.
+name: eth-marketplace
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -35,7 +40,7 @@ services:
       # behaves the way it would on a real chain.
       - "--block-time=2"
     ports:
-      - "8545:8545"
+      - "8546:8545"
 
 volumes:
   postgres-data:

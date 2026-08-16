@@ -2,6 +2,18 @@ import 'dotenv/config';
 import {z} from 'zod';
 
 /**
+ * Treat an empty variable as absent.
+ *
+ * An unset variable in a .env file arrives as an empty string, not as undefined, so `.optional()`
+ * on its own rejects the shipped .env.example and refuses to start over settings the operator
+ * deliberately left blank. Every optional value below goes through this.
+ */
+function optional<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+}
+
+
+/**
  * Environment is validated once, at boot, and never read from `process.env` again.
  *
  * A misconfigured RPC URL or a missing contract address should crash the process on startup with a
@@ -50,7 +62,18 @@ const envSchema = z.object({
   DEPLOY_BLOCK: z.coerce.bigint().default(0n),
 
   IPFS_GATEWAY: z.string().url().default('https://ipfs.io/ipfs/'),
-  PINATA_JWT: z.string().optional(),
+  PINATA_JWT: optional(z.string()),
+  /**
+   * Whether this process runs the indexer.
+   *
+   * Off lets the API serve seeded or already-indexed data without a chain connection, and lets the
+   * indexer run as its own process (`pnpm indexer`) without the API double-indexing behind it.
+   */
+  INDEXER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+
 });
 
 const parsed = envSchema.safeParse(process.env);

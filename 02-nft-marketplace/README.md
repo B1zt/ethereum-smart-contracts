@@ -1,179 +1,198 @@
 # NFT Collection and Marketplace
 
-A full-stack NFT platform on Ethereum: a gas-optimised collection with multi-phase Merkle allowlist
-minting, an ERC-1155 edition contract, a gasless EIP-712 order book, and English auctions that
-extend on late bids.
+A complete NFT platform on Ethereum: a collection people can mint from, a marketplace where they can
+trade what they minted, and auctions for the pieces worth bidding on.
 
-Contracts in Solidity with Foundry. Backend in TypeScript with Fastify, Prisma and viem. Frontend in
-Next.js with wagmi and RainbowKit.
+Solidity contracts, a TypeScript API that indexes the chain, and a Next.js frontend. The whole thing
+runs on your laptop in about five minutes, with no testnet faucet and no API keys.
+
+![The mint page](docs/screenshots/01-mint.png)
 
 ---
 
-## What is actually interesting here
+## What you can do with it
 
-Most NFT marketplace samples stop at "transfer the token, send the ETH". These are the parts that
-take real work to get right, and each one is covered by tests that would fail if it were done the
-naive way.
+**Mint from a collection.** Drops run in phases. An early phase can be gated by an allowlist where
+every address has its own allowance, and a later one can be open to everybody. The page shows which
+phase is live and how long is left.
 
-**Listing costs no gas.** Sellers sign an EIP-712 order in their wallet; nothing touches the chain
-until a buyer settles it. Cancelling one order is one storage write. Cancelling every order a maker
-has ever signed is also one storage write, via a nonce bump.
+**Buy and sell without paying gas to list.** A seller signs an order in their wallet, which costs
+nothing. The order only touches the chain when a buyer fills it. Cancelling every order you have
+ever signed takes a single transaction.
 
-**Merkle leaves carry per-address allowances.** A leaf commits to `(address, allowance)` rather than
-just an address, so one root expresses per-wallet tiers instead of a flat cap. Leaves are double
-hashed, which is what stops a 64-byte internal node from being replayed as a leaf to forge
-membership.
+**Bid in auctions that cannot be sniped.** A bid in the closing minutes pushes the end time out, so
+the winner is whoever values the item most rather than whoever pays the highest priority fee.
 
-**The off-chain tree and the on-chain verifier are pinned to each other.** Both build a tree from
-the same fixed entry set and assert the same root constant, in
-[`MerkleCrossCheck.t.sol`](contracts/test/MerkleCrossCheck.t.sol) and
-[`tree.test.ts`](backend/src/merkle/tree.test.ts). Without this, a mismatch in leaf encoding or pair
-ordering fails silently: the API serves well-formed proofs and every mint reverts on-chain.
+**Browse by trait.** The collection page builds its filter panel from the metadata it has loaded,
+with a count for every trait value.
 
-**Hostile collections cannot break settlement.** `royaltyInfo` is a call into an untrusted contract.
-It may revert, return nonsense, or claim a 90% royalty and drain the seller. The call is wrapped,
-the interface is probed first, and the result is capped at 10%. Tested with a
-`GreedyRoyaltyCollection` and a `RevertingRoyaltyCollection`.
+![Browsing the collection](docs/screenshots/02-explore.png)
 
-**Payouts cannot brick a trade.** A recipient that rejects ETH would otherwise make every sale
-involving them permanently unfillable. Failed native pushes become a withdrawable credit instead,
-with the forwarded gas capped so a recipient cannot grief settlement by burning it.
+Every item has its own page with the current price, the offers sitting below it, and the sale
+history.
 
-**Auctions extend on late bids.** Without this, the winning strategy is to bid in the final block
-and the auction is decided by whoever pays the highest priority fee. A bid inside the extension
-window pushes the end time out.
+![An item page](docs/screenshots/03-token.png)
 
-**The indexer survives reorgs.** The cursor tracks the highest *final* block, trailing the head by a
-confirmation depth. Each pass deletes rows sourced from non-final blocks and re-scans. Every write
-is keyed on `(txHash, logIndex)`, so replaying a range is a no-op rather than a double count, and
-the process can be killed at any point and resumed without bookkeeping.
+![Live auctions](docs/screenshots/04-auctions.png)
+
+A wallet's portfolio shows its holdings, its open listings, and one button that invalidates every
+order it has ever signed.
+
+![A wallet portfolio](docs/screenshots/05-portfolio.png)
+
+---
+
+## Run it yourself
+
+You will need [Docker](https://docs.docker.com/get-docker/), [Node 20+](https://nodejs.org),
+[pnpm](https://pnpm.io/installation) and
+[Foundry](https://book.getfoundry.sh/getting-started/installation).
+
+### 1. Start Postgres and a local chain
+
+```bash
+docker compose up -d
+```
+
+This gives you Postgres on port 5432 and an Anvil node on 8546. Anvil is a local Ethereum chain: it
+mines on a timer, hands out test accounts with plenty of ETH, and forgets everything when you stop
+it. No faucet, no waiting for testnet blocks.
+
+### 2. Deploy the contracts
+
+```bash
+cd contracts
+forge install
+
+export RPC=http://localhost:8546
+export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+forge script script/Deploy.s.sol:Deploy --rpc-url $RPC --broadcast
+```
+
+That key is Anvil's first test account. It is printed in Foundry's own documentation and is
+worthless on any real network. Never put a key that holds real funds into a shell variable.
+
+The script prints the deployed addresses ready to paste into your `.env` files. Keep the output.
+
+### 3. Put some state on the chain
+
+```bash
+export COLLECTION_ADDRESS=<from step 2>
+export AUCTION_ADDRESS=<from step 2>
+
+forge script script/Demo.s.sol:Demo --rpc-url $RPC --broadcast
+```
+
+This mints 95 NFTs across four wallets, opens two mint phases, reveals the metadata and starts an
+auction. Run it against a fresh chain; it is not written to be applied twice.
+
+### 4. Start the backend
+
+```bash
+cd ../backend
+cp .env.example .env        # paste in the addresses from step 2
+pnpm install
+pnpm prisma db push         # create the tables
+pnpm db:seed                # sample listings, offers and sale history
+pnpm dev
+```
+
+`pnpm db:seed` exists because listings and offers are signed off-chain and only reach the chain when
+somebody fills them. Without it every page would be correct and empty, which tells you nothing about
+whether the app works.
+
+### 5. Start the frontend
+
+```bash
+cd ../frontend
+cp .env.example .env.local  # paste in the NEXT_PUBLIC_ addresses from step 2
+pnpm install
+pnpm dev
+```
+
+Open <http://localhost:3000>. To connect a wallet, add the Anvil network to MetaMask (RPC
+`http://localhost:8546`, chain id `31337`) and import the test key from step 2.
+
+### If something does not work
+
+| Symptom | Cause |
+|---|---|
+| Every page says "wrong network" | Your wallet is not on chain 31337. |
+| Numbers are all zero or `-` | The backend cannot reach Anvil, or the addresses in `.env` do not match what the deploy script printed. `curl localhost:4000/health` should return `{"status":"ok"}`. |
+| Backend exits at startup | It validates its whole environment at boot and names the variable at fault. The error message is the fix. |
+| Frontend shows an empty collection | You skipped `pnpm db:seed`, or the collection address in `.env.local` is not the one you deployed. |
 
 ---
 
 ## Layout
 
 ```
-contracts/          Foundry project
-  src/
-    Collection721.sol      ERC-721A collection, phases, allowlists, delayed reveal, EIP-2981
-    Editions1155.sol       ERC-1155 multi-edition drops
-    Marketplace.sol        EIP-712 order book, partial fills, EIP-1271 contract wallets
-    EnglishAuction.sol     Escrowed auctions with anti-snipe extension
-    PaymentSettler.sol     Shared fee, royalty and payout logic
-    OrderTypes.sol         EIP-712 order struct and type hash
-  test/                    130 tests: unit, fuzz, attacker contracts, cross-check
-  script/Deploy.s.sol      Deploys the stack and prints both env files
-
-backend/            Fastify + Prisma + viem
-  src/orders/              Order validation against live chain state, order book API
-  src/indexer/             Reorg-safe log indexer
-  src/merkle/              Allowlist tree builder and proof endpoint
-  src/collections/         Collection, token, trait filtering, portfolio
-  src/auctions/            Auction and bid queries
-
-frontend/           Next.js App Router + wagmi + RainbowKit
-  src/app/                 Mint, explore, token detail, auctions, portfolio
-  src/components/          MintPanel, TradePanel, TokenCard
-  src/hooks/useSignOrder   Sign an EIP-712 order and publish it
-  src/lib/orders.ts        Client-side order construction
+contracts/                    Solidity, built and tested with Foundry
+  src/Collection721.sol       ERC-721A with phased minting and delayed reveal
+  src/Editions1155.sol        ERC-1155 editions
+  src/Marketplace.sol         EIP-712 signed order book
+  src/EnglishAuction.sol      Auctions with anti-snipe extension
+  src/PaymentSettler.sol      Shared fee and royalty splitting
+  script/Deploy.s.sol         Deployment
+  script/Demo.s.sol           Demo state for a local chain
+  test/                       130 tests
+backend/                      Fastify + Prisma + Postgres
+  src/indexer/                Chain events into the database
+  src/orders/                 Order validation and the order book
+  src/merkle/                 Allowlist trees and proofs
+  prisma/seed.ts              Sample data
+frontend/                     Next.js App Router, wagmi + RainbowKit
 ```
-
----
-
-## Running it
-
-Everything runs locally against Anvil. No testnet faucet, no RPC key.
 
 ```bash
-# 1. Postgres and a local chain
-docker compose up -d
-
-# 2. Contracts
-cd contracts
-forge install
-forge test                                   # 130 tests
-
-PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast
-# Prints the exact env blocks for the backend and frontend. Paste them in.
-
-# 3. Backend
-cd ../backend
-cp .env.example .env                         # paste the printed addresses
-pnpm install
-pnpm db:migrate
-pnpm dev                                     # http://localhost:4000
-
-# 4. Frontend
-cd ../frontend
-cp .env.example .env.local                   # paste the printed addresses
-pnpm install
-pnpm dev                                     # http://localhost:3000
+cd contracts && forge test    # 130 contract tests
+cd backend   && pnpm test     # 10 Merkle and order validation tests
 ```
-
-To open minting, add a phase as the owner:
-
-```bash
-NOW=$(cast block latest --rpc-url http://127.0.0.1:8545 --field timestamp)
-
-cast send $COLLECTION "addPhase((bytes32,uint96,uint64,uint64,uint16,uint16))" \
-  "(0x0,10000000000000000,$NOW,$((NOW + 86400)),5,0)" \
-  --private-key $PRIVATE_KEY --rpc-url http://127.0.0.1:8545
-```
-
-That is a public phase: no Merkle root, 0.01 ETH, five per wallet, open for a day.
 
 ---
 
-## Tests
+## Decisions worth explaining
 
-```bash
-cd contracts
-forge test                    # 130 tests
-forge test --gas-report
-forge coverage --ir-minimum
-FOUNDRY_PROFILE=deep forge test   # 10,000 fuzz runs
+The parts that take real work to get right, each covered by a test that would fail if it were done
+the naive way.
 
-cd ../backend
-pnpm test                     # merkle cross-check
-```
+**Listing is a signature, not a transaction.** An order is an EIP-712 struct the seller signs.
+Creating one costs nothing, and cancelling every order a maker has ever signed is a single nonce
+bump. The trade-off is that an order can go stale, so the API revalidates ownership and approval
+before serving it.
 
-Coverage sits at 92% of lines. The suite includes fuzz tests for value conservation (fee plus
-royalty plus proceeds always equals the price exactly, with nothing stranded in the venue),
-invariant tests on supply caps, and dedicated attacker contracts for reentrancy, greedy royalties
-and rejected payouts.
+**Merkle leaves carry per-address allowances.** A leaf commits to `(address, allowance)` rather than
+to an address alone, so one root expresses per-wallet tiers instead of a flat cap. Leaves are double
+hashed, which is what stops a 64-byte internal node being replayed as a leaf to forge membership.
 
----
+**The off-chain tree and the on-chain verifier are pinned to each other.** Both build from the same
+fixed entry set and assert the same root, in
+[`MerkleCrossCheck.t.sol`](contracts/test/MerkleCrossCheck.t.sol) and
+[`tree.test.ts`](backend/src/merkle/tree.test.ts). Without this a mismatch fails silently: the API
+serves well-formed proofs and every mint reverts with the same unhelpful error.
 
-## Security notes
+**Hostile collections cannot break settlement.** `royaltyInfo` is a call into an untrusted contract.
+It may revert, return nonsense, or claim a 90% royalty and drain the seller. The call is wrapped, the
+interface probed first, and the result capped at 10%. Tested against a `GreedyRoyaltyCollection` and
+a `RevertingRoyaltyCollection`.
 
-Deliberate design decisions, and what each one is defending against:
+**Payouts cannot brick a trade.** A recipient that rejects ETH would otherwise make every sale
+involving them permanently unfillable. A failed native push becomes a withdrawable credit instead,
+with the forwarded gas capped so a recipient cannot grief settlement by burning it.
 
-| Decision | Reason |
-|---|---|
-| Royalties capped at 10% | A malicious collection could otherwise report a 100% royalty and take the seller's proceeds |
-| `royaltyInfo` wrapped in `try` | A collection whose royalty call reverts would make its own tokens untradeable |
-| Native pushes capped at 30k gas | Stops a recipient griefing settlement by burning all forwarded gas |
-| Failed pushes fall back to escrow | A recipient that rejects ETH must not brick every trade it touches |
-| Payment must be exact on mint | Silently keeping an overpayment is a quiet way to take user funds |
-| Phase edits preserve mint counters | Otherwise the owner grants unlimited extra allocation by touching the config |
-| Provenance hash is write-once | The commitment is worthless if it can be rewritten after seeing who minted what |
-| Reveal and metadata freeze are one-way | The strongest signal a creator can give that the art will not be swapped |
-| Cancellation is never pausable | A pause must not trap a maker in a live order |
-| Escrow withdrawal is never pausable | A pause must not trap user funds |
-| ERC-20 currencies are allowlisted | Fee-on-transfer and rebasing tokens break the accounting assumption that the recipient receives what was sent |
-| Auctions escrow the asset | A signature-based auction lets the seller move the asset mid-auction, so every bid settles into a revert |
-| Auctions cannot be cancelled after a bid | Otherwise a seller walks away from any price they do not like |
-| Settlement is permissionless | A trade must not be held hostage by an absent seller or winner |
+**The indexer survives reorgs.** Its cursor sits at the highest *finalised* block. Everything above
+that is deleted and re-scanned each pass, and every row is keyed on `(txHash, logIndex)`, so a reorg
+cannot leave a phantom sale behind. Indexers that track the chain head instead get this wrong.
 
-`Ownable2Step` throughout, so a mistyped ownership transfer cannot brick admin access. Every
-privileged function is `onlyOwner`, and **the owner should be a multisig in production**. The deploy
-script accepts an `OWNER` env var for exactly that.
-
-This code has not been audited. It is a reference implementation.
+**Auctions escrow the asset.** The NFT moves into the auction contract, so a seller cannot sell it
+elsewhere while bids are live.
 
 ---
 
-## License
+## What is not here
 
-MIT
+Nothing here has been audited. It is a reference implementation, written to be read.
+
+Off-chain order storage is a single Postgres instance. A real marketplace would replicate it,
+because losing it loses every unfilled order.

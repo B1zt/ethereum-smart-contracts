@@ -88,7 +88,9 @@ model Order {
 /// A settled trade, indexed from an OrderFilled log.
 model Fill {
   id           String        @id @default(cuid())
-  orderHash    String
+  /// Nullable because of the SetNull below. A fill outlives the order it filled, and a not-null
+  /// column would make deleting a filled order violate its own constraint.
+  orderHash    String?
   order        Order?        @relation(fields: [orderHash], references: [hash], onDelete: SetNull)
   maker        String
   taker        String
