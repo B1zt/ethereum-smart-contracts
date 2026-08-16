@@ -50,7 +50,26 @@ const envSchema = z.object({
    * deployment this would be a proper auth layer; a bearer token keeps the demo honest about the
    * fact that the endpoint is privileged.
    */
-  ADMIN_API_KEY: z.string().min(16).optional(),
+  /**
+   * An unset variable in a .env file arrives as an empty string, not as undefined, so `.optional()`
+   * alone would reject the shipped .env.example and fail startup with a length complaint about a
+   * key the operator never set. Empty is normalised to absent first.
+   */
+  ADMIN_API_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(16).optional(),
+  ),
+  /**
+   * Whether this process runs the indexer.
+   *
+   * Off lets the API serve seeded or already-indexed data without a chain connection, and lets the
+   * indexer run as its own process (`pnpm indexer`) without the API double-indexing behind it.
+   */
+  INDEXER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+
 });
 
 const parsed = envSchema.safeParse(process.env);

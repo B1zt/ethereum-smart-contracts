@@ -42,7 +42,12 @@ export default function CollectionPage({params}: {params: Promise<{address: stri
     const map = new Map<string, Map<string, number>>();
 
     for (const token of tokens) {
-      for (const attribute of token.attributes ?? []) {
+      // Metadata comes from whatever the token URI serves, which is outside this app's control.
+      // A collection whose attributes are an object rather than the conventional array should
+      // render without facets, not blank the page with a client-side exception.
+      if (!Array.isArray(token.attributes)) continue;
+
+      for (const attribute of token.attributes) {
         const values = map.get(attribute.trait_type) ?? new Map<string, number>();
         values.set(attribute.value, (values.get(attribute.value) ?? 0) + 1);
         map.set(attribute.trait_type, values);

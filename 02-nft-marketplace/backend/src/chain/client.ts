@@ -1,8 +1,11 @@
 import {createPublicClient, http, type PublicClient} from 'viem';
-import {mainnet, sepolia} from 'viem/chains';
+import {foundry, mainnet, sepolia} from 'viem/chains';
 import {config} from '../config.js';
 
 const supportedChains = {
+  // Local Anvil. The project ships one in docker-compose, so leaving it out would mean the
+  // documented zero-config setup could not actually start.
+  [foundry.id]: foundry,
   [mainnet.id]: mainnet,
   [sepolia.id]: sepolia,
 } as const;
