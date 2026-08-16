@@ -36,17 +36,17 @@ export default function HomePage() {
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Supply"
-          value={token ? formatCompact(token.totalSupply) : '—'}
+          value={token ? formatCompact(token.totalSupply) : '-'}
           hint={token ? `of ${formatCompact(token.cap)} cap` : undefined}
         />
         <Stat
           label="Staked"
-          value={staking ? `${formatCompact(staking.totalAssets)} ${symbol}` : '—'}
+          value={staking ? `${formatCompact(staking.totalAssets)} ${symbol}` : '-'}
           hint={staking ? `${staking.stakerCount} stakers` : undefined}
         />
         <Stat
           label="Staking APR"
-          value={staking ? `${(staking.aprBps / 100).toFixed(2)}%` : '—'}
+          value={staking ? `${(staking.aprBps / 100).toFixed(2)}%` : '-'}
           hint="From the current reward stream"
         />
         <Stat
@@ -54,7 +54,7 @@ export default function HomePage() {
           value={
             airdrop && airdrop.entryCount > 0
               ? `${Math.round((airdrop.claimedCount / airdrop.entryCount) * 100)}%`
-              : '—'
+              : '-'
           }
           hint={airdrop ? `${airdrop.claimedCount} of ${airdrop.entryCount} wallets` : undefined}
         />

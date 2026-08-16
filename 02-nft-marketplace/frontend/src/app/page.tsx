@@ -41,19 +41,19 @@ export default function HomePage() {
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Floor"
-          value={collection?.floorPrice ? `${formatPrice(collection.floorPrice)} ETH` : '—'}
+          value={collection?.floorPrice ? `${formatPrice(collection.floorPrice)} ETH` : '-'}
         />
         <Stat
           label="Volume"
-          value={collection ? `${formatCompact(collection.volumeAllTime)} ETH` : '—'}
+          value={collection ? `${formatCompact(collection.volumeAllTime)} ETH` : '-'}
         />
-        <Stat label="Owners" value={collection ? collection.ownerCount.toLocaleString() : '—'} />
+        <Stat label="Owners" value={collection ? collection.ownerCount.toLocaleString() : '-'} />
         <Stat
           label="Supply"
           value={
             collection
               ? `${Number(collection.totalMinted).toLocaleString()} / ${Number(collection.maxSupply).toLocaleString()}`
-              : '—'
+              : '-'
           }
         />
       </section>

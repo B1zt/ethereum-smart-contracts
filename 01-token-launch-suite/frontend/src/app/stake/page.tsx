@@ -124,18 +124,18 @@ export default function StakePage() {
         <div className="card">
           <p className="text-xs uppercase tracking-wide text-neutral-500">Total staked</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">
-            {stats ? formatPrice(stats.totalAssets) : '—'} {symbol}
+            {stats ? formatPrice(stats.totalAssets) : '-'} {symbol}
           </p>
         </div>
         <div className="card">
           <p className="text-xs uppercase tracking-wide text-neutral-500">Current APR</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">
-            {stats ? `${(stats.aprBps / 100).toFixed(2)}%` : '—'}
+            {stats ? `${(stats.aprBps / 100).toFixed(2)}%` : '-'}
           </p>
         </div>
         <div className="card">
           <p className="text-xs uppercase tracking-wide text-neutral-500">Stakers</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{stats?.stakerCount ?? '—'}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{stats?.stakerCount ?? '-'}</p>
         </div>
       </div>
 

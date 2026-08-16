@@ -81,7 +81,7 @@ export default function TokenPage({
             {token.metadata?.name ?? `#${tokenId}`}
           </h1>
           <p className="text-sm text-neutral-500">
-            Owned by <span className="text-neutral-300">{owner ? shortAddress(owner) : '—'}</span>
+            Owned by <span className="text-neutral-300">{owner ? shortAddress(owner) : '-'}</span>
           </p>
         </header>
 

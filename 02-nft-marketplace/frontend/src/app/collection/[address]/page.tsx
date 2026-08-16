@@ -78,18 +78,18 @@ export default function CollectionPage({params}: {params: Promise<{address: stri
           <div>
             <dt className="text-neutral-500">Floor</dt>
             <dd className="font-medium tabular-nums">
-              {collection?.floorPrice ? `${formatPrice(collection.floorPrice)} ETH` : '—'}
+              {collection?.floorPrice ? `${formatPrice(collection.floorPrice)} ETH` : '-'}
             </dd>
           </div>
           <div>
             <dt className="text-neutral-500">24h volume</dt>
             <dd className="font-medium tabular-nums">
-              {collection ? `${formatCompact(collection.volume24h)} ETH` : '—'}
+              {collection ? `${formatCompact(collection.volume24h)} ETH` : '-'}
             </dd>
           </div>
           <div>
             <dt className="text-neutral-500">Owners</dt>
-            <dd className="font-medium tabular-nums">{collection?.ownerCount ?? '—'}</dd>
+            <dd className="font-medium tabular-nums">{collection?.ownerCount ?? '-'}</dd>
           </div>
         </dl>
       </header>
